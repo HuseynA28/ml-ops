@@ -10,13 +10,14 @@ cd ~/mlops_docker
 docker-compose up --build -d jenkins
 ```
 ## 1.1 update Jenkins
+```
 docker pull jenkins/jenkins:lts
 docker stop jenkins_server
 docker rm jenkins_server
 docker run -d --name jenkins_server -p 8080:8080 -p 50000:50000 \
 -v jenkins_home:/var/jenkins_home \
 jenkins/jenkins:lts
-
+```
 ## 2. Virtualbox port forwarding
 8080 -> 8080
 
