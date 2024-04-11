@@ -19,20 +19,20 @@
 - Let's create new customer
 main.py customers endpoint
 ```
+from fastapi import FastAPI
 from pydantic import BaseModel
-
-
+from typing import List, Optional
 class Customer(BaseModel):
     CustomerID: int
-    Gender: Optional[str] = None
-    Age: Optional[int] = None
-    AnnualIncome: Optional[float] = None
-    SpendingScore: Optional[int] = None
-
+    Gender : Optional[str]=None
+    Age :Optional[int]= None
+    AnnualIncome: Optional[int]= None
+    SpendingScore :Optional[int]=None
+app =FastAPI()
 
 @app.post("/customers")
 async def create_customer(customer: Customer):
-    return {"data": f"Customer {customer.CustomerID} is created."}
+    return {"data":f"Customer {customer.CustomerID} is created"}
 ```
 - Browser: http://127.0.0.1:8002/docs
 - POST/customers
