@@ -2,79 +2,49 @@
 
 ## routers/customer.py
 - Move customer paths to routers/customer.py
-```commandline
-from typing import List
+```command line
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, status, HTTPException
-from sqlmodel import Session, select
-from mall.models import Customer, CustomerCreateUpdate, ShowCustomer
+import jwt
+from fastapi import HTTPException, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from passlib.context import CryptContext
 
-router = APIRouter()
+class AuthHandler():
+    security = HTTPBearer()
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    secret = 'SECRET'
 
-# Create new customer
-@router.post("/customers")
-async def create_customer(request: CustomerCreateUpdate, session: Session = Depends(get_db)):
-    new_customer = Customer(
-        Gender = request.Gender,
-        Age = request.Age,
-        AnnualIncome = request.AnnualIncome,
-        SpendingScore = request.SpendingScore
-    )
+    def get_password_hash(self, password):
+        return self.pwd_context.hash(password)
 
-    with session:
-        session.add(new_customer)
-        session.commit()
-        session.refresh(new_customer)
+    def verify_password(self, plain_password, hashed_password):
+        return self.pwd_context.verify(plain_password, hashed_password)
 
-        return new_customer
+    def encode_token(self, user_id):
+        payload = {
+            'exp': datetime.utcnow() + timedelta(days=0, minutes=5),
+            'iat': datetime.utcnow(),
+            'sub': user_id
+        }
+        return jwt.encode(
+            payload,
+            self.secret,
+            algorithm='HS256'
+        )
 
-# Get all customers
-@router.get("/customers", response_model=List[ShowCustomer])
-async def get_all(session: Session = Depends(get_db)):
-    customers = session.exec(select(Customer)).all()
-    return customers
+    def decode_token(self, token):
+        try:
+            payload = jwt.decode(token, self.secret, algorithms=['HS256'])
+            return payload['sub']
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail='Signature has expired')
+        except jwt.InvalidTokenError as e:
+            raise HTTPException(status_code=401, detail='Invalid token')
 
+    def auth_wrapper(self, auth: HTTPAuthorizationCredentials = Security(self.security)):
+        return self.decode_token(auth.credentials)
 
-# Get customer by id
-@router.get("/customers/{id}", status_code=status.HTTP_200_OK, response_model=ShowCustomer)
-async def get_by_id(id: int, session: Session = Depends(get_db)):
-    with session:
-        customer_here = session.get(Customer, id)
-        if not customer_here:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                                detail=f"Customer id: {id} is not found.")
-        return customer_here
-
-
-# Delete customer by id
-@router.delete("/customers/{id}", status_code=status.HTTP_200_OK)
-async def get_by_id(id: int, session: Session = Depends(get_db)):
-    with session:
-        customer_here = session.get(Customer, id)
-        if not customer_here:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                                detail=f"Customer id: {id} is not found.")
-        session.delete(customer_here)
-        session.commit()
-        return {"ok": True}
-
-
-# Update customer
-@router.put("/customer/{id}", status_code=status.HTTP_202_ACCEPTED)
-async def update_customer(id: int, request: CustomerCreateUpdate, session: Session = Depends(get_db)):
-    with session:
-        one_customer = session.get(Customer, id)
-        if not one_customer:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                                detail=f"Customer with {id} has not found.")
-        update_data = request.dict(exclude_unset=True)
-        for key, value in update_data.items():
-            setattr(one_customer, key, value)
-
-        session.add(one_customer)
-        session.commit()
-        session.refresh(one_customer)
-        return one_customer
 ```
 
 ## main.py
