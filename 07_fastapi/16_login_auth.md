@@ -2,50 +2,47 @@
 
 ## package/ auth.py
 ```commandline
-from fastapi import APIRouter, Depends, status, HTTPException
-from sqlmodel import Session
-from mall.database import get_session
-from mall.models import CreateUpdateCustomer, Customer, ShowCustomer
+from datetime import datetime, timedelta
 
-router = APIRouter()
+import jwt
+from fastapi import HTTPException, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from passlib.context import CryptContext
 
-# Create new customer
-@router.post("/customers", status_code=status.HTTP_201_CREATED)
-async def create_customer(request: CreateUpdateCustomer, session: Session = Depends(get_session)):
-    new_customer = Customer(
-        Gender=request.Gender,
-        Age=request.Age,
-        AnnualIncome=request.AnnualIncome,
-        SpendingScore=request.SpendingScore
-    )
-    with session:
-        session.add(new_customer)
-        session.commit()
-        session.refresh(new_customer)
-        return new_customer
+class AuthHandler():
+    security = HTTPBearer()
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    secret = 'SECRET'
 
+    def get_password_hash(self, password):
+        return self.pwd_context.hash(password)
 
-# Get customer by id
-@router.get("/customers/{id}", response_model=ShowCustomer)
-async def get_by_id(id: int, session: Session = Depends(get_session)):
-    with session:
-        customer_here = session.get(Customer, id)
-        if not customer_here:
-            raise HTTPException(status_code=404, detail=f"Customer with id: {id} has not found.")
-        return customer_here
+    def verify_password(self, plain_password, hashed_password):
+        return self.pwd_context.verify(plain_password, hashed_password)
 
+    def encode_token(self, user_id):
+        payload = {
+            'exp': datetime.utcnow() + timedelta(days=0, minutes=5),
+            'iat': datetime.utcnow(),
+            'sub': user_id
+        }
+        return jwt.encode(
+            payload,
+            self.secret,
+            algorithm='HS256'
+        )
 
-# Delete a customer by id
-@router.delete("/customer/{id}", status_code=status.HTTP_200_OK)
-async def delete_customer(id: int, session: Session = Depends(get_session)):
-    with session:
-        one_customer = session.get(Customer, id)
-        if not one_customer:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
-                                detail=f"Customer with {id} has not found.")
-        session.delete(one_customer)
-        session.commit()
-        return {"ok": True}
+    def decode_token(self, token):
+        try:
+            payload = jwt.decode(token, self.secret, algorithms=['HS256'])
+            return payload['sub']
+        except jwt.ExpiredSignatureError:
+            raise HTTPException(status_code=401, detail='Signature has expired')
+        except jwt.InvalidTokenError as e:
+            raise HTTPException(status_code=401, detail='Invalid token')
+
+    def auth_wrapper(self, auth: HTTPAuthorizationCredentials = Security(self.security)):
+        return self.decode_token(auth.credentials)
 
 
 # Update customer
@@ -144,6 +141,40 @@ app.include_router(user.router)
 app.include_router(customer.router)
 
 
+# Create Database and Tables on startup
+@app.on_event("startup")
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+```
+
+## user.py
+
+```
+from mall.models import ShowUser, User, CreateUser, Login
+from mall.auth import AuthHandler
+from sqlalchemy.orm import Session
+from fastapi import Depends, HTTPException, status, APIRouter
+
+router = APIRouter()
+
+auth_handler = AuthHandler()
+
+# Create user
+@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=ShowUser)
+async def create_user(request: CreateUser, session: Session = Depends(get_db)):
+    # Code continues here...
+
+@router.post('/login')
+def login(request: Login, session: Session = Depends(get_db)):
+    with session:
+        statement = select(User).where(User.username == request.username)
+        results = session.exec(statement)
+        one_user = results.first()
+        if (one_user is None) or (not auth_handler.verify_password(request.password, one_user.password)):
+            raise HTTPException(status_code=401, detail='Invalid username and/or password')
+        token = auth_handler.encode_token(one_user.username)
+        return {'token': token}
+```
 # Create Database and Tables on startup
 @app.on_event("startup")
 def create_db_and_tables():
