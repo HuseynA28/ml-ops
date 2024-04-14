@@ -147,34 +147,7 @@ def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 ```
 
-## user.py
 
-```
-from mall.models import ShowUser, User, CreateUser, Login
-from mall.auth import AuthHandler
-from sqlalchemy.orm import Session
-from fastapi import Depends, HTTPException, status, APIRouter
-
-router = APIRouter()
-
-auth_handler = AuthHandler()
-
-# Create user
-@router.post("/register", status_code=status.HTTP_201_CREATED, response_model=ShowUser)
-async def create_user(request: CreateUser, session: Session = Depends(get_db)):
-    # Code continues here...
-
-@router.post('/login')
-def login(request: Login, session: Session = Depends(get_db)):
-    with session:
-        statement = select(User).where(User.username == request.username)
-        results = session.exec(statement)
-        one_user = results.first()
-        if (one_user is None) or (not auth_handler.verify_password(request.password, one_user.password)):
-            raise HTTPException(status_code=401, detail='Invalid username and/or password')
-        token = auth_handler.encode_token(one_user.username)
-        return {'token': token}
-```
 # Create Database and Tables on startup
 @app.on_event("startup")
 def create_db_and_tables():
