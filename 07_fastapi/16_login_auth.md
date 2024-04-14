@@ -2,7 +2,7 @@
 
 ## package/ auth.py
 ```commandline
-om datetime import datetime, timedelta
+from datetime import datetime, timedelta
 
 import jwt
 from fastapi import HTTPException, Security
@@ -43,6 +43,7 @@ class AuthHandler():
 
     def auth_wrapper(self, auth: HTTPAuthorizationCredentials = Security(security)):
         return self.decode_token(auth.credentials)
+
 ```
 ###  customer.py
 ```
@@ -134,6 +135,7 @@ class CreateUpdateCustomer(SQLModel):
     Age:Optional[int]
     AnnualIncome:float
     SpendingScore:int
+
 class ShowCustomer(SQLModel):
     CustomerID: int
     Gender: str
@@ -147,6 +149,30 @@ class Login(SQLModel):
 class ShowUser(SQLModel):
     name: str
     email: str
+
+
+class Login(SQLModel):
+    username: str
+    password: str
+
+class User(SQLModel, table=True):
+    user_id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    username: str
+    email: str
+    password: str
+
+class CreateUpdateUser(SQLModel):
+    name: str
+    username: str
+    email: str
+    password: str
+
+
+
+class ShowUser(SQLModel):
+    name: str
+    email: str
     
 ```
 
@@ -156,7 +182,7 @@ from fastapi import APIRouter
 from fastapi import Depends, status, HTTPException
 from sqlmodel import Session, select
 from mall.database import get_db
-from mall.models import ShowUser, ShowUser, CreateUpdateCustomer, Login
+from mall.models import ShowUser, ShowUser, CreateUpdateUser, Login, User
 
 from mall.rounters import auth
 
@@ -166,9 +192,9 @@ auth_handler = auth.AuthHandler()
 
 # Create user
 @router.post("/register", status_code=status.HTTP_201_CREATED, response_model=ShowUser)
-async def create_user(request: CreateUpdateCustomer, session: Session = Depends(get_db)):
+async def create_user(request: CreateUpdateUser, session: Session = Depends(get_db)):
     hashed_password = auth_handler.get_password_hash(request.password)
-    from sqlalchemy.testing.pickleable import User
+
     new_user = User(
         name=request.name,
         username=request.username,
@@ -208,7 +234,7 @@ def protected(username=Depends(auth_handler.auth_wrapper)):
 
 ## main.py
 ```commandline
-from typing import List
+om typing import List
 
 from fastapi import FastAPI, Depends, status, HTTPException
 from sqlmodel import Session, select
